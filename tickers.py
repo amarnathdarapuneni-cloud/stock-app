@@ -1,0 +1,4 @@
+TICKERS = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META",
+    "TSLA", "NVDA", "JPM", "V", "UNH"
+]
