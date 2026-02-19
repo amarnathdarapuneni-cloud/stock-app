@@ -111,7 +111,10 @@ def index():
 
 @app.route("/stock")
 def stock():
-    symbol = request.args.get("symbol")
+    symbol = request.args.get("symbol", "").upper().strip()
+    if symbol not in TICKERS:
+        return jsonify({"error": "Unsupported ticker"}), 400
+
     data = get_yearly_data(symbol)
     if not data:
         return jsonify({"error": "No data"}), 400
@@ -126,8 +129,8 @@ def top_gainers():
         return jsonify(CACHE["top_gainers"]["data"])
 
     results = []
-    # Limit to first 5 tickers to avoid long API calls
-    for ticker in TICKERS[:5]:
+    # Limit to first 10 tickers to balance speed and useful ranking
+    for ticker in TICKERS[:10]:
         ret = get_return_last_year(ticker)
         if ret is not None:
             results.append({"ticker": ticker, "return": round(ret, 2)})
