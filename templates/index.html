@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock What-If Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.25rem; }
+    p { color: #444; }
+    form { display: grid; gap: 0.8rem; background: #f7f7f7; padding: 1rem; border-radius: 8px; }
+    label { font-weight: bold; }
+    input, select, button { padding: 0.55rem; font-size: 1rem; }
+    button { cursor: pointer; background: #1d4ed8; color: white; border: none; border-radius: 6px; }
+    .card { margin-top: 1rem; padding: 1rem; border-radius: 8px; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .result { background: #ecfeff; }
+    .profit { color: #166534; font-weight: bold; }
+    .loss { color: #991b1b; font-weight: bold; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>What if I invested earlier?</h1>
+  <p>Pick a stock, date, and amount to estimate what that investment would be worth today.</p>
+
+  <form method="post">
+    <div>
+      <label for="symbol">Ticker</label><br>
+      <select id="symbol" name="symbol" required>
+        {% for ticker in tickers %}
+          <option value="{{ ticker }}" {% if request.form.get('symbol') == ticker %}selected{% endif %}>{{ ticker }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="invest_date">Investment date</label><br>
+      <input id="invest_date" type="date" name="invest_date" max="{{ today }}" value="{{ request.form.get('invest_date', '') }}" required>
+    </div>
+
+    <div>
+      <label for="amount">Amount (USD)</label><br>
+      <input id="amount" type="number" name="amount" min="1" step="0.01" placeholder="1000" value="{{ request.form.get('amount', '') }}" required>
+    </div>
+
+    <button type="submit">Calculate</button>
+  </form>
+
+  {% if error %}
+    <div class="card error">{{ error }}</div>
+  {% endif %}
+
+  {% if result %}
+    <div class="card result">
+      <h2>{{ result.symbol }} investment summary</h2>
+      <div class="grid">
+        <div><strong>Amount invested:</strong></div><div>${{ "%.2f"|format(result.amount) }}</div>
+        <div><strong>Buy date used:</strong></div><div>{{ result.buy_date }}</div>
+        <div><strong>Buy price:</strong></div><div>${{ "%.2f"|format(result.buy_price) }}</div>
+        <div><strong>Shares purchased:</strong></div><div>{{ result.shares }}</div>
+        <div><strong>Current price:</strong></div><div>${{ "%.2f"|format(result.current_price) }}</div>
+        <div><strong>Value today:</strong></div><div>${{ "%.2f"|format(result.current_value) }}</div>
+        <div><strong>Gain / Loss:</strong></div>
+        <div class="{{ 'profit' if result.gain_loss >= 0 else 'loss' }}">
+          ${{ "%.2f"|format(result.gain_loss) }} ({{ "%.2f"|format(result.gain_loss_pct) }}%)
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</body>
+</html>

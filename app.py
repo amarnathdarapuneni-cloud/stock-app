@@ -1,7 +1,9 @@
-from flask import Flask, render_template, jsonify, request
-import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import time
+
+from flask import Flask, jsonify, render_template, request
+import yfinance as yf
+
 from tickers import TICKERS
 
 app = Flask(__name__)
@@ -9,6 +11,7 @@ app = Flask(__name__)
 # Simple cache to avoid repeated slow API calls
 CACHE = {"top_gainers": {"data": None, "timestamp": 0}}
 CACHE_TTL = 6 * 60 * 60  # 6 hours
+
 
 # --- Helper functions ---
 def get_yearly_data(symbol):
@@ -19,10 +22,11 @@ def get_yearly_data(symbol):
         df.reset_index(inplace=True)
         return {
             "dates": df["Date"].dt.strftime("%Y-%m-%d").tolist(),
-            "prices": df["Close"].round(2).tolist()
+            "prices": df["Close"].round(2).tolist(),
         }
     except Exception:
         return None
+
 
 def get_return_last_year(symbol):
     try:
@@ -37,10 +41,73 @@ def get_return_last_year(symbol):
     except Exception:
         return None
 
+
+def calculate_what_if(symbol, invest_date, amount):
+    try:
+        start = datetime.combine(invest_date, datetime.min.time())
+        end = datetime.today() + timedelta(days=1)
+        df = yf.download(symbol, start=start, end=end, progress=False, auto_adjust=True)
+        if df.empty:
+            return None, "No price data found for that date range."
+
+        buy_price = float(df.iloc[0]["Close"])
+        current_price = float(df.iloc[-1]["Close"])
+        shares = amount / buy_price
+        current_value = shares * current_price
+        gain_loss = current_value - amount
+        gain_loss_pct = (gain_loss / amount) * 100
+
+        return {
+            "buy_date": df.index[0].strftime("%Y-%m-%d"),
+            "buy_price": round(buy_price, 2),
+            "current_price": round(current_price, 2),
+            "shares": round(shares, 4),
+            "current_value": round(current_value, 2),
+            "gain_loss": round(gain_loss, 2),
+            "gain_loss_pct": round(gain_loss_pct, 2),
+        }, None
+    except Exception:
+        return None, "Unable to calculate investment outcome right now."
+
+
 # --- Routes ---
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def index():
-    return render_template("index.html", tickers=TICKERS)
+    result = None
+    error = None
+
+    if request.method == "POST":
+        symbol = request.form.get("symbol", "").strip().upper()
+        amount_raw = request.form.get("amount", "").strip()
+        date_raw = request.form.get("invest_date", "").strip()
+
+        try:
+            amount = float(amount_raw)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            error = "Please provide a valid investment amount greater than 0."
+            amount = None
+
+        try:
+            invest_date = datetime.strptime(date_raw, "%Y-%m-%d").date()
+            if invest_date > date.today():
+                error = "Investment date cannot be in the future."
+        except ValueError:
+            invest_date = None
+            error = "Please provide a valid investment date."
+
+        if symbol not in TICKERS:
+            error = "Please select a supported ticker symbol."
+
+        if not error:
+            result, error = calculate_what_if(symbol, invest_date, amount)
+            if result:
+                result["symbol"] = symbol
+                result["amount"] = round(amount, 2)
+
+    return render_template("index.html", tickers=TICKERS, result=result, error=error, today=date.today().isoformat())
+
 
 @app.route("/stock")
 def stock():
@@ -49,6 +116,7 @@ def stock():
     if not data:
         return jsonify({"error": "No data"}), 400
     return jsonify(data)
+
 
 @app.route("/top-gainers")
 def top_gainers():
@@ -68,6 +136,7 @@ def top_gainers():
 
     CACHE["top_gainers"] = {"data": results, "timestamp": now}
     return jsonify(results)
+
 
 # --- Run app ---
 if __name__ == "__main__":
